@@ -416,7 +416,10 @@ let find_in_module_with_includes
     | None -> true
     | Some mex ->
       let mexports = !(mex eikind) in
-      mem (string_of_id id) mexports
+      let s = string_of_id id in
+      if BU.starts_with s "op_"
+      then mem s mexports || (match Parser.AST.string_to_op s with Some (n, _) -> mem n mexports | _ -> false)
+      else mem s mexports
     in
     let mincludes = match SMap.try_find env.includes mname with
     | None -> []
@@ -513,10 +516,20 @@ let found_local_binding r (lb:local_binding) : ML _ =
     (bv_to_name x r)
 
 let find_in_module env lid (k_global_def: _ -> _ -> ML _) k_not_found : ML _ =
-    begin match SMap.try_find (sigmap env) (string_of_lid lid) with
-        | Some sb -> k_global_def lid sb
-        | None -> k_not_found
-    end
+    let name = Ident.string_of_id (ident_of_lid lid) in
+    if BU.starts_with name "op_"
+    then
+      match Parser.AST.string_to_op name with
+      | Some (display_name, _) ->
+        let display_lid = lid_of_ids (ns_of_lid lid @ [mk_ident (display_name, range_of_id (ident_of_lid lid))]) in
+        (match SMap.try_find (sigmap env) (string_of_lid lid) with
+         | Some sb -> k_global_def lid sb
+         | None ->
+           (match SMap.try_find (sigmap env) (string_of_lid display_lid) with
+            | Some sb -> k_global_def display_lid sb
+            | None -> k_not_found))
+      | None -> (match SMap.try_find (sigmap env) (string_of_lid lid) with Some sb -> k_global_def lid sb | None -> k_not_found)
+    else (match SMap.try_find (sigmap env) (string_of_lid lid) with Some sb -> k_global_def lid sb | None -> k_not_found)
 
 let try_lookup_id env (id:ident) : ML (option term) =
   match unmangleOpName id with

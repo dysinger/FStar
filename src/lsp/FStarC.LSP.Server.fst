@@ -139,9 +139,9 @@ let get_or_create_document (st: server_state) (uri: string) (text: string) : ML 
 let run_ide_query (repl: repl_state) (q: query) : ML (list json) =
   let () = FStarC.Interactive.JsonHelper.set_capture_printer capture_printer in
   let () = install_ide_mode_hooks capture_printer in
-  let _result = js_repl_eval repl q in
+  let js_responses, _st_opt = js_repl_eval repl q in
   let () = FStarC.Interactive.JsonHelper.clear_capture_printer () in
-  drain_ide_output ()
+  js_responses @ drain_ide_output ()
 
 let publish_diagnostics (uri: string) (issues: list json) : ML unit =
   let params = JsonAssoc [

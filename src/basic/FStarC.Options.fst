@@ -228,6 +228,7 @@ let defaults = [
   ("hint_info"                                 , Bool false);
   ("ide"                                       , Bool false);
   ("ide_id_info_off"                           , Bool false);
+  ("lsp"                                       , Bool false);
   ("ifuel"                                     , Unset);
   ("include"                                   , List []);
   ("initial_fuel"                              , Int 2);

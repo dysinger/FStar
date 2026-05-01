@@ -24,8 +24,8 @@ open FStarC.Interactive.Ide.Types
 /// Used by the LSP server to drive the IDE subsystem programmatically.
 val js_repl_eval : repl_state -> query -> ML (list FStarC.Json.json & either repl_state int)
 
-val interactive_mode (filename:string): ML unit
-
 /// Install hooks to redirect Format output and error handling to the given printer callback.
 /// Used by the LSP server to capture IDE output instead of writing to stdout.
 val install_ide_mode_hooks : (FStarC.Json.json -> ML unit) -> ML unit
+
+val interactive_mode (filename:string): ML unit

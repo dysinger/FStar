@@ -49,6 +49,7 @@
         fstar = ocamlPackages.callPackage ./.nix/fstar.nix {
           inherit version z3 ocamlLibraryPath karamel-src;
           karamelOcamlDeps = karamelDrv.propagatedBuildInputs;
+          lspEnabled = true;  # force derivation rebuild for LSP
         };
 
         emacs = pkgs.writeScriptBin "emacs-fstar" ''

@@ -23,6 +23,7 @@
   stdint,
   util-linux,
   version,
+  lspEnabled ? false,  # force derivation rebuild for LSP
   which,
   yojson,
   z3,

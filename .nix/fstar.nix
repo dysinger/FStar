@@ -106,6 +106,7 @@ buildDunePackage {
 
   buildPhase = ''
     export PATH="${z3}/bin:$PATH"
+    # LSP support enabled
     make -j$(nproc)
   '';
 

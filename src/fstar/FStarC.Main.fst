@@ -26,6 +26,8 @@ open FStarC.Util
 
 open FStarC.Hooks (* KEEP: we need this module for its top-level effect. *)
 
+open FStarC.LSP.Server
+
 open FStarC.Class.Show
 
 module E = FStarC.Errors
@@ -377,8 +379,16 @@ let go_normal () : ML unit =
       (* Try to load the plugins that are specified in the command line *)
       load_native_tactics ();
 
+      (* --lsp: Language Server Protocol mode *)
+      if Options.lsp () then begin
+        if Options.interactive () then
+          Errors.raise_error0 Errors.Error_FlagConflict
+            "--lsp and --ide are mutually exclusive";
+        UF.set_rw ();
+        start ()
+      end
       (* --ide: Interactive mode *)
-      if Options.interactive () then begin
+      else if Options.interactive () then begin
         UF.set_rw ();
         match filenames with
         | [] -> (* input validation: move to process args? *)

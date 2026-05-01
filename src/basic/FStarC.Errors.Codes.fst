@@ -376,4 +376,6 @@ let default_settings : list error_setting =
     Warning_ProofRecovery                             , CWarning, 359;
     Error_CannotResolveRecord                         , CAlwaysError, 360;
     Error_MissingPopOptions                           , CWarning, 361;
+    Error_FlagConflict                                , CAlwaysError, 362;
+    Error_LSPError                                    , CAlwaysError, 363;
     ]

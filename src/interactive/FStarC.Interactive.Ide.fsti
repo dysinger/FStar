@@ -17,5 +17,11 @@
 module FStarC.Interactive.Ide
 
 open FStarC.Effect
+open FStarC.Interactive.Ide.Types
 
 val interactive_mode (filename:string): ML unit
+
+/// Evaluate a single IDE query against a repl_state.
+/// Returns (json_responses, state_or_exitcode).
+/// Used by the LSP server to drive the IDE subsystem programmatically.
+val js_repl_eval : repl_state -> query -> ML (list FStarC.Json.json & either repl_state int)

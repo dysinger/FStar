@@ -245,6 +245,8 @@ val hint_file_for_src           : string  -> ML string
 
 val ide                         : unit    -> ML bool
 
+val lsp                         : unit    -> ML bool
+
 val ide_id_info_off             : unit    -> ML bool
 
 val set_ide_filename            : string -> ML unit

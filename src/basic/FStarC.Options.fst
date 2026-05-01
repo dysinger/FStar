@@ -2116,8 +2116,8 @@ let hint_file_for_src src_filename =
         in
         Format.fmt1 "%s.hints" file_name
 let ide                          () = get_ide                         ()
-let ide_id_info_off              () = get_ide_id_info_off             ()
 let lsp                          () = get_lsp                         ()
+let ide_id_info_off              () = get_ide_id_info_off             ()
 let ide_file_name_st =
   let v = mk_ref (None #string) in
   let set f =

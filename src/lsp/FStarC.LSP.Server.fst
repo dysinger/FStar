@@ -53,10 +53,11 @@ type server_state = {
 }
 
 (* ── IDE output capture ───────────────────────────────────────── *)
-(* The IDE subsystem writes responses directly to stdout via
-   Format.set_printer. We install a capturing printer that appends
-   to a buffer, then drain it after each query to extract diagnostics
-   and results. *)
+(* The IDE subsystem writes responses via write_json (JsonHelper).
+   We install a capture printer there that appends to a buffer, then
+   drain it after each query to extract diagnostics and results.
+   Info/warning/error messages go through Format.set_printer — we
+   also install_ide_mode_hooks to capture those. *)
 let ide_capture_buffer : ref (list json) = mk_ref []
 
 let capture_printer (js: json) : ML unit =
@@ -134,10 +135,12 @@ let get_or_create_document (st: server_state) (uri: string) (text: string) : ML 
     let doc = { doc_uri = uri; doc_text = text; doc_repl = repl } in
     ({ st with documents = doc :: st.documents }, repl)
 
-(* Install the capture printer, run an IDE query, drain output *)
+(* Install capture printers, run an IDE query, drain output *)
 let run_ide_query (repl: repl_state) (q: query) : ML (list json) =
+  let () = FStarC.Interactive.JsonHelper.set_capture_printer capture_printer in
   let () = install_ide_mode_hooks capture_printer in
   let _result = js_repl_eval repl q in
+  let () = FStarC.Interactive.JsonHelper.clear_capture_printer () in
   drain_ide_output ()
 
 let publish_diagnostics (uri: string) (issues: list json) : ML unit =

@@ -31,6 +31,11 @@ val try_assoc : string -> assoct -> ML (option json)
 exception InvalidQuery of string
 exception UnexpectedJsonType of string & json
 
+(* Capture printer: when set, write_json routes output to this callback.
+   Used by LSP server to intercept IDE output. *)
+val set_capture_printer : (json -> ML unit) -> ML unit
+val clear_capture_printer : unit -> ML unit
+
 val write_json : json -> ML unit
 val js_fail : string -> json -> ML 'a
 

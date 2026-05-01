@@ -25,6 +25,7 @@ val method_needs_initialization : lsp_method -> bool
 val uri_to_filepath : string -> ML string
 val filepath_to_uri : string -> ML string
 val lsp_position_to_fstar : string -> int -> int -> ML (string & int & int)
+val extract_prefix : string -> int -> int -> ML string
 val try_field : string -> json -> ML (option json)
 val field_str : string -> json -> ML (option string)
 val field_int : string -> json -> ML (option int)

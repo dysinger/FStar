@@ -238,9 +238,10 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
        | Some uri, Some (line, char) ->
          (match U.try_find (fun d -> d.doc_uri = uri) st.documents with
           | Some doc ->
-            let _fpos = LSPX.lsp_position_to_fstar uri line char in
+            let prefix = LSPX.extract_prefix doc.doc_text line char in
             let qid = show id in
-            let query = { qid = qid; qq = AutoComplete ("", CKCode) } in
+            let ctx = if U.ends_with prefix "." then CKModuleOrNamespace (true, true) else CKCode in
+            let query = { qid = qid; qq = AutoComplete (prefix, ctx) } in
             let ide_msgs = run_ide_query doc.doc_repl query in
             let result = extract_result_from_ide ide_msgs in
             let resp = LSPM.Response id (match result with Some r -> r | None -> JsonList []) in
@@ -260,7 +261,7 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
           | Some doc ->
             let fpos = LSPX.lsp_position_to_fstar uri line char in
             let qid = show id in
-            let query = { qid = qid; qq = Lookup ("", LKSymbolOnly, Some fpos, ["symbol-only"], None) } in
+            let query = { qid = qid; qq = Lookup ("", LKSymbolOnly, Some fpos, ["symbol-only"; "type"], None) } in
             let ide_msgs = run_ide_query doc.doc_repl query in
             let result = extract_result_from_ide ide_msgs in
             let resp = LSPM.Response id (match result with Some r -> r | None -> JsonNull) in

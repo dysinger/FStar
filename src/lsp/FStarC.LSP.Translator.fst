@@ -55,6 +55,26 @@ let lsp_position_to_fstar (uri: string) (line: int) (char: int) : ML (string & i
   let path = uri_to_filepath uri in
   (path, line + 1, char)
 
+(* Extract the identifier prefix at a cursor position for completion *)
+let extract_prefix (text: string) (line: int) (char: int) : ML string =
+  let lines = U.splitlines text in
+  if line >= 0 && line < List.length lines then
+    let target = List.nth lines line in
+    let len = String.length target in
+    let cursor = if char > len then len else char in
+    let rec find_start (i: int) : ML int =
+      if i <= 0 then 0
+      else
+        let c = U.char_at target (i - 1) in
+        if U.is_letter_or_digit c || c = '_' || c = '.' then find_start (i - 1)
+        else i
+    in
+    let start = find_start cursor in
+    if start < cursor then U.substring target start (cursor - start)
+    else ""
+  else
+    ""
+
 (* JSON field extraction helpers *)
 let try_field (key: string) (obj: json) : ML (option json) =
   match obj with

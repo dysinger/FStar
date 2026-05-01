@@ -231,10 +231,11 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
 
     (* ── Completion ── *)
     | LSPM.TextDocumentCompletion ->
-      (match LSPX.get_text_document_uri params with
-       | Some uri ->
+      (match LSPX.get_text_document_uri params, LSPX.get_position params with
+       | Some uri, Some (line, char) ->
          (match U.try_find (fun d -> d.doc_uri = uri) st.documents with
           | Some doc ->
+            let _fpos = LSPX.lsp_position_to_fstar uri line char in
             let qid = show id in
             let query = { qid = qid; qq = AutoComplete ("", CKCode) } in
             let ide_msgs = run_ide_query doc.doc_repl query in
@@ -250,29 +251,41 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
 
     (* ── Hover ── *)
     | LSPM.TextDocumentHover ->
-      (match st.documents with
-       | doc :: _ ->
-         let qid = show id in
-         let query = { qid = qid; qq = Lookup ("", LKSymbolOnly, None, ["symbol-only"], None) } in
-         let ide_msgs = run_ide_query doc.doc_repl query in
-         let result = extract_result_from_ide ide_msgs in
-         let resp = LSPM.Response id (match result with Some r -> r | None -> JsonNull) in
-         (st, LSPM.serialize_jsonrpc resp)
-       | [] ->
+      (match LSPX.get_text_document_uri params, LSPX.get_position params with
+       | Some uri, Some (line, char) ->
+         (match U.try_find (fun d -> d.doc_uri = uri) st.documents with
+          | Some doc ->
+            let fpos = LSPX.lsp_position_to_fstar uri line char in
+            let qid = show id in
+            let query = { qid = qid; qq = Lookup ("", LKSymbolOnly, Some fpos, ["symbol-only"], None) } in
+            let ide_msgs = run_ide_query doc.doc_repl query in
+            let result = extract_result_from_ide ide_msgs in
+            let resp = LSPM.Response id (match result with Some r -> r | None -> JsonNull) in
+            (st, LSPM.serialize_jsonrpc resp)
+          | None ->
+            let resp = LSPM.Response id JsonNull in
+            (st, LSPM.serialize_jsonrpc resp))
+       | _ ->
          let resp = LSPM.Response id JsonNull in
          (st, LSPM.serialize_jsonrpc resp))
 
     (* ── Definition ── *)
     | LSPM.TextDocumentDefinition ->
-      (match st.documents with
-       | doc :: _ ->
-         let qid = show id in
-         let query = { qid = qid; qq = Lookup ("", LKCode, None, ["definition"], None) } in
-         let ide_msgs = run_ide_query doc.doc_repl query in
-         let result = extract_result_from_ide ide_msgs in
-         let resp = LSPM.Response id (match result with Some r -> r | None -> JsonNull) in
-         (st, LSPM.serialize_jsonrpc resp)
-       | [] ->
+      (match LSPX.get_text_document_uri params, LSPX.get_position params with
+       | Some uri, Some (line, char) ->
+         (match U.try_find (fun d -> d.doc_uri = uri) st.documents with
+          | Some doc ->
+            let fpos = LSPX.lsp_position_to_fstar uri line char in
+            let qid = show id in
+            let query = { qid = qid; qq = Lookup ("", LKCode, Some fpos, ["definition"], None) } in
+            let ide_msgs = run_ide_query doc.doc_repl query in
+            let result = extract_result_from_ide ide_msgs in
+            let resp = LSPM.Response id (match result with Some r -> r | None -> JsonNull) in
+            (st, LSPM.serialize_jsonrpc resp)
+          | None ->
+            let resp = LSPM.Response id JsonNull in
+            (st, LSPM.serialize_jsonrpc resp))
+       | _ ->
          let resp = LSPM.Response id JsonNull in
          (st, LSPM.serialize_jsonrpc resp))
 

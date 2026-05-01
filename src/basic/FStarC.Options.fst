@@ -1919,6 +1919,13 @@ let parse_cmd_line () =
     let paths = as_list as_string (get_option "include") in
     paths |> List.iter (fun p -> !check_include_dir p);
     Find.set_include_path (Find.get_include_path () @ paths);
+    (* Also read FSTAR_PATH env var (colon-separated, like C_INCLUDE_PATH) *)
+    (match Util.expand_environment_variable "FSTAR_PATH" with
+     | None -> ()
+     | Some s ->
+       let env_paths = String.split [':'] s |> List.filter (fun p -> p <> "") in
+       env_paths |> List.iter (fun p -> !check_include_dir p);
+       Find.set_include_path (Find.get_include_path () @ env_paths));
     ()
   in
   parsed_args_state := Some (snapshot_all ());

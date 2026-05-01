@@ -1,0 +1,7 @@
+# F* Compiler OpenSpec Configuration
+schema: spec-driven
+project: fstar
+version: 0.1.0
+
+specs:
+  - fstar-lsp

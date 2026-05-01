@@ -52,6 +52,58 @@ type server_state = {
   documents: list document_entry;
 }
 
+(* ── IDE output capture ───────────────────────────────────────── *)
+(* The IDE subsystem writes responses directly to stdout via
+   Format.set_printer. We install a capturing printer that appends
+   to a buffer, then drain it after each query to extract diagnostics
+   and results. *)
+let ide_capture_buffer : ref (list json) = mk_ref []
+
+let capture_printer (js: json) : ML unit =
+  ide_capture_buffer := !ide_capture_buffer @ [js]
+
+let drain_ide_output () : ML (list json) =
+  let out = !ide_capture_buffer in
+  ide_capture_buffer := [];
+  out
+
+let extract_issues_from_ide (msgs: list json) : ML (list json) =
+  msgs |> List.filter_map (fun msg ->
+    match msg with
+    | JsonAssoc fields ->
+      (match U.try_find (fun (k, _) -> k = "kind") fields with
+       | Some (_, JsonStr "response") ->
+         (match U.try_find (fun (k, _) -> k = "status") fields with
+          | Some (_, JsonStr "failure") ->
+            (match U.try_find (fun (k, _) -> k = "response") fields with
+             | Some (_, JsonList issues) -> Some issues
+             | _ -> None)
+          | _ -> None)
+       | _ -> None)
+    | _ -> None)
+  |> List.flatten
+
+let extract_result_from_ide (msgs: list json) : ML (option json) =
+  msgs |> List.tryFind (fun msg ->
+    match msg with
+    | JsonAssoc fields ->
+      (match U.try_find (fun (k, _) -> k = "kind") fields with
+       | Some (_, JsonStr "response") ->
+         (match U.try_find (fun (k, _) -> k = "status") fields with
+          | Some (_, JsonStr "success") -> true
+          | _ -> false)
+       | _ -> false)
+    | _ -> false)
+  |> Option.map (fun msg ->
+    match msg with
+    | JsonAssoc fields ->
+      (match U.try_find (fun (k, _) -> k = "response") fields with
+       | Some (_, v) -> v
+       | _ -> JsonNull)
+    | _ -> JsonNull)
+
+(* ── Server state ─────────────────────────────────────────────── *)
+
 let initial_server_state () : ML server_state =
   { lifecycle = LSPM.StateUninitialized;
     documents = []
@@ -82,10 +134,11 @@ let get_or_create_document (st: server_state) (uri: string) (text: string) : ML 
     let doc = { doc_uri = uri; doc_text = text; doc_repl = repl } in
     ({ st with documents = doc :: st.documents }, repl)
 
+(* Install the capture printer, run an IDE query, drain output *)
 let run_ide_query (repl: repl_state) (q: query) : ML (list json) =
-  let result = js_repl_eval repl q in
-  let (responses, _) = result in
-  responses
+  let () = install_ide_mode_hooks capture_printer in
+  let _result = js_repl_eval repl q in
+  drain_ide_output ()
 
 let publish_diagnostics (uri: string) (issues: list json) : ML unit =
   let params = JsonAssoc [
@@ -98,6 +151,8 @@ let publish_diagnostics (uri: string) (issues: list json) : ML unit =
     ("params", params)
   ] in
   LSPT.write_message (string_of_json msg)
+
+(* ── Request handlers ─────────────────────────────────────────── *)
 
 let handle_initialize (st: server_state) (id: int) : ML (server_state & string) =
   let caps = LSPM.build_initialize_result () in
@@ -122,18 +177,20 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
       let resp = LSPM.Response id JsonNull in
       ({ st with lifecycle = LSPM.StateShutdown }, LSPM.serialize_jsonrpc resp)
 
+    (* ── Text sync: check + publish diagnostics ── *)
     | LSPM.TextDocumentDidOpen ->
       (match LSPX.get_text_document_uri params, LSPX.get_text_document_text params with
        | Some uri, Some text ->
          let st, repl = get_or_create_document st uri text in
          let qid = show id in
          let query = { qid = qid; qq = FullBuffer (text, Full, false) } in
-         let responses = run_ide_query repl query in
-         publish_diagnostics uri responses;
+         let ide_msgs = run_ide_query repl query in
+         let issues = extract_issues_from_ide ide_msgs in
+         publish_diagnostics uri issues;
          let resp = LSPM.Response id JsonNull in
          (st, LSPM.serialize_jsonrpc resp)
        | _ ->
-         let err = LSPM.build_error id (-32602) "Invalid params: missing textDocument.uri or text" in
+         let err = LSPM.build_error id (-32602) "Missing textDocument.uri or text" in
          (st, string_of_json err))
 
     | LSPM.TextDocumentDidChange ->
@@ -149,8 +206,9 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
             let st, repl = get_or_create_document st uri text in
             let qid = show id in
             let query = { qid = qid; qq = FullBuffer (text, Full, false) } in
-            let responses = run_ide_query repl query in
-            publish_diagnostics uri responses;
+            let ide_msgs = run_ide_query repl query in
+            let issues = extract_issues_from_ide ide_msgs in
+            publish_diagnostics uri issues;
             let resp = LSPM.Response id JsonNull in
             (st, LSPM.serialize_jsonrpc resp)
           | None ->
@@ -164,7 +222,6 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
       (match LSPX.get_text_document_uri params with
        | Some uri ->
          let docs = List.filter (fun d -> d.doc_uri <> uri) st.documents in
-         let st = { st with documents = docs } in
          publish_diagnostics uri [];
          let resp = LSPM.Response id JsonNull in
          (st, LSPM.serialize_jsonrpc resp)
@@ -172,6 +229,7 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
          let err = LSPM.build_error id (-32602) "Missing textDocument.uri" in
          (st, string_of_json err))
 
+    (* ── Completion ── *)
     | LSPM.TextDocumentCompletion ->
       (match LSPX.get_text_document_uri params with
        | Some uri ->
@@ -179,8 +237,9 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
           | Some doc ->
             let qid = show id in
             let query = { qid = qid; qq = AutoComplete ("", CKCode) } in
-            let responses = run_ide_query doc.doc_repl query in
-            let resp = LSPM.Response id (JsonList responses) in
+            let ide_msgs = run_ide_query doc.doc_repl query in
+            let result = extract_result_from_ide ide_msgs in
+            let resp = LSPM.Response id (match result with Some r -> r | None -> JsonList []) in
             (st, LSPM.serialize_jsonrpc resp)
           | None ->
             let resp = LSPM.Response id (JsonList []) in
@@ -189,34 +248,35 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
          let resp = LSPM.Response id (JsonList []) in
          (st, LSPM.serialize_jsonrpc resp))
 
+    (* ── Hover ── *)
     | LSPM.TextDocumentHover ->
       (match st.documents with
        | doc :: _ ->
          let qid = show id in
          let query = { qid = qid; qq = Lookup ("", LKSymbolOnly, None, ["symbol-only"], None) } in
-         let responses = run_ide_query doc.doc_repl query in
-         let resp = LSPM.Response id (match responses with
-           | r :: _ -> r
-           | _ -> JsonNull) in
+         let ide_msgs = run_ide_query doc.doc_repl query in
+         let result = extract_result_from_ide ide_msgs in
+         let resp = LSPM.Response id (match result with Some r -> r | None -> JsonNull) in
          (st, LSPM.serialize_jsonrpc resp)
        | [] ->
          let resp = LSPM.Response id JsonNull in
          (st, LSPM.serialize_jsonrpc resp))
 
+    (* ── Definition ── *)
     | LSPM.TextDocumentDefinition ->
       (match st.documents with
        | doc :: _ ->
          let qid = show id in
          let query = { qid = qid; qq = Lookup ("", LKCode, None, ["definition"], None) } in
-         let responses = run_ide_query doc.doc_repl query in
-         let resp = LSPM.Response id (match responses with
-           | r :: _ -> r
-           | _ -> JsonNull) in
+         let ide_msgs = run_ide_query doc.doc_repl query in
+         let result = extract_result_from_ide ide_msgs in
+         let resp = LSPM.Response id (match result with Some r -> r | None -> JsonNull) in
          (st, LSPM.serialize_jsonrpc resp)
        | [] ->
          let resp = LSPM.Response id JsonNull in
          (st, LSPM.serialize_jsonrpc resp))
 
+    (* ── Formatting ── *)
     | LSPM.TextDocumentFormatting ->
       (match LSPX.get_text_document_uri params with
        | Some uri ->
@@ -224,9 +284,10 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
           | Some doc ->
             let qid = show id in
             let query = { qid = qid; qq = Format (doc.doc_text) } in
-            let responses = run_ide_query doc.doc_repl query in
-            let resp = LSPM.Response id (match responses with
-              | (JsonAssoc fields) :: _ ->
+            let ide_msgs = run_ide_query doc.doc_repl query in
+            let result = extract_result_from_ide ide_msgs in
+            let resp = LSPM.Response id (match result with
+              | Some (JsonAssoc fields) ->
                 (match U.try_find (fun (k, _) -> k = "formatted-code") fields with
                  | Some (_, formatted) -> formatted
                  | _ -> JsonNull)
@@ -239,6 +300,7 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
          let err = LSPM.build_error id (-32602) "Missing textDocument.uri" in
          (st, string_of_json err))
 
+    (* ── Workspace ── *)
     | LSPM.WorkspaceSymbol ->
       (match LSPX.field_str "query" params with
        | Some query_str ->
@@ -258,8 +320,9 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
                repl_lang = []
              }
          in
-         let responses = run_ide_query repl query in
-         let resp = LSPM.Response id (JsonList responses) in
+         let ide_msgs = run_ide_query repl query in
+         let result = extract_result_from_ide ide_msgs in
+         let resp = LSPM.Response id (match result with Some r -> r | None -> JsonList []) in
          (st, LSPM.serialize_jsonrpc resp)
        | None ->
          let resp = LSPM.Response id (JsonList []) in
@@ -272,7 +335,7 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
          let query = { qid = qid; qq = RestartSolver } in
          (match st.documents with
           | doc :: _ ->
-            let _responses = run_ide_query doc.doc_repl query in
+            let _ = run_ide_query doc.doc_repl query in
             ()
           | _ -> ());
          let resp = LSPM.Response id JsonNull in
@@ -284,6 +347,8 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
     | _ ->
       let err = LSPM.build_error id (-32601) ("Method not implemented: " ^ LSPM.method_name method') in
       (st, string_of_json err)
+
+(* ── Main loop ────────────────────────────────────────────────── *)
 
 let handle_notification (st: server_state) (method': LSPM.lsp_method) (_params: json) : ML server_state =
   match method' with

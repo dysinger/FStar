@@ -157,7 +157,7 @@ let rec resugar_term_as_op (t:S.term) : ML (option (string&expected_arity)) =
     (C.op_Addition    , "+" );
     (C.op_Subtraction , "-" );
     (C.op_Minus       , "-" );
-    (C.op_Multiply    , "*" );
+    (C.op_Star        , "*" );
     (C.op_Division    , "/" );
     (C.op_Modulus     , "%" );
     (C.read_lid       , "!" );
@@ -309,8 +309,6 @@ let passes : ref (list resugar_pass_t) = mk_ref []
 (* It's important the first pass registered is resugar_term_base',
 which is complete. *)
 let register_pass p = passes := p :: !passes
-
-exception SkipResugar
 
 let resugar_term' (env: DsEnv.env) (t:S.term) : ML A.term =
   let rec aux (passes:list resugar_pass_t) env t : ML _ =

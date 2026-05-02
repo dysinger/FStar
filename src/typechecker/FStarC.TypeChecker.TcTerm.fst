@@ -693,7 +693,7 @@ let wrap_guard_with_tactic_opt topt g : ML _ =
      (* We use always_map_guard so the annotation is there even for trivial
       * guards. If the user writes (a <: b by fail ""), we should fail. *)
      Env.always_map_guard g (fun g ->
-     Common.mk_by_tactic tactic (U.mk_squash U_zero g)) //guards are in U_zero
+     Common.mk_by_tactic tactic (U.mk_squash g)) //guards have type prop
 
 
 (*
@@ -850,8 +850,7 @@ and tc_maybe_toplevel_term env (e:term) : ML (term                  (* type-chec
     mk (Tm_meta {tm=e; meta=Meta_desugared Meta_smt_pat}) top.pos, c, g  //AR: keeping the pats as meta for the second phase. smtencoding does an unmeta.
 
   | Tm_meta {tm=e; meta=Meta_pattern(names, pats)} ->
-    let t, u = U.type_u () in
-    let e, c, g = tc_check_tot_or_gtot_term env e t None in
+    let e, c, g = tc_check_tot_or_gtot_term env e t_prop None in
     //NS: PATTERN INFERENCE
     //if `pats` is empty (that means the user did not annotate a pattern).
     //In that case try to infer a pattern by
@@ -1879,8 +1878,7 @@ and tc_value env (e:term) : ML (term
     if Debug.high ()
     then Format.print3 "(%s) Checking refinement formula %s; binder is %s\n"
         (Range.string_of_range top.pos) (show phi) (show x.binder_bv);
-    let t_phi, _ = U.type_u () in
-    let phi, _, f2 = tc_check_tot_or_gtot_term env phi t_phi
+    let phi, _, f2 = tc_check_tot_or_gtot_term env phi t_prop
       (Some "refinement formula must be pure or ghost") in
     let e = {U.refine x.binder_bv phi with pos=top.pos} in
     let t = mk (Tm_type u) top.pos in
@@ -2247,7 +2245,8 @@ and tc_abs_check_binders env bs bs_expected use_eq
              *)
           | _ ->
             if Debug.high () then Format.print1 "Checking binder %s\n" (show hd);
-            let t, _, g1_env = tc_tot_or_gtot_term env hd.sort in
+            let tu, u = U.type_u () in
+            let t, _, g1_env = tc_check_tot_or_gtot_term env hd.sort tu None in
             let g2_env =
               let label_guard g =
                 TcUtil.label_guard
@@ -2936,7 +2935,10 @@ and check_application_args env head (chead:comp) ghead args expected_topt : ML (
 (******************************************************************************)
 and maybe_elaborate_short_circuit_args env0 head args
   : ML (option (term & lcomp & guard_t))
-  = match (U.un_uinst head).n with
+  = (* Make sure to collect args in the head. *)
+    let head, args' = U.head_and_args head in
+    let args = args'@args in
+    match (U.un_uinst head).n with
     | Tm_fvar fv when S.fv_eq_lid fv Const.op_And || S.fv_eq_lid fv Const.op_Or ->
       begin match args with
       | [(e1, _aq1); (e2, _aq2)] ->
@@ -2945,10 +2947,9 @@ and maybe_elaborate_short_circuit_args env0 head args
         let env1 = Env.set_expected_typ env0 U.t_bool in
         let e1, c1, g1 = tc_term env1 e1 in
         let e2, c2, g2 = tc_term env1 e2 in
-        let is_pure = TcComm.is_tot_or_gtot_lcomp c1 || TcComm.is_tot_or_gtot_lcomp c2 in
         let c = TcUtil.bind r false env0 (Some e1) c1 (None, c2) in
         let c = TcComm.set_result_typ_lc c U.t_bool in
-        if not (TcComm.is_tot_or_gtot_lcomp c1) then
+        if not (TcComm.is_pure_or_ghost_lcomp c1) then
           let x1 = S.new_bv None U.t_bool in
           let e =
             let x1 = S.bv_to_name x1 in
@@ -2960,7 +2961,7 @@ and maybe_elaborate_short_circuit_args env0 head args
           let e = mk (Tm_let {lbs=(false, [lb]); body=SS.close [S.mk_binder x1] e}) e.pos in
           // TODO: maybe_lift??
           Some (e, c, g1 ++ g2)
-        else if not (TcComm.is_tot_or_gtot_lcomp c2) then
+        else if not (TcComm.is_pure_or_ghost_lcomp c2) then
           let e =
             if is_and
             then U.if_then_else e1 e2 U.exp_false_bool

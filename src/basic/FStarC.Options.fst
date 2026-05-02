@@ -226,6 +226,7 @@ let defaults = [
   ("hint_info"                                 , Bool false);
   ("ide"                                       , Bool false);
   ("ide_id_info_off"                           , Bool false);
+  ("lsp"                                       , Bool false);
   ("ifuel"                                     , Unset);
   ("include"                                   , List []);
   ("initial_fuel"                              , Int 2);
@@ -491,6 +492,7 @@ let get_hint_dir                ()      = lookup_opt "hint_dir"                 
 let get_hint_file               ()      = lookup_opt "hint_file"                (as_option as_string)
 let get_ide                     ()      = lookup_opt "ide"                      as_bool
 let get_ide_id_info_off         ()      = lookup_opt "ide_id_info_off"          as_bool
+let get_lsp                     ()      = lookup_opt "lsp"                      as_bool
 let get_print                   ()      = lookup_opt "print"                    as_bool
 let get_print_in_place          ()      = lookup_opt "print_in_place"           as_bool
 let get_initial_fuel            ()      = lookup_opt "initial_fuel"             as_int
@@ -1032,6 +1034,11 @@ let specs_with_types warn_unsafe : ML (list (char & string & opt_type & Pprint.d
     "ide",
     Const (Bool true),
     text "JSON-based interactive mode for IDEs (used by VSCode, emacs, neovim, etc.)");
+
+  ( noshort,
+    "lsp",
+    Const (Bool true),
+    text "Language Server Protocol mode (standard LSP over stdin/stdout)");
 
   ( noshort,
     "ide_id_info_off",
@@ -1917,6 +1924,13 @@ let parse_cmd_line () =
     let paths = as_list as_string (get_option "include") in
     paths |> List.iter (fun p -> !check_include_dir p);
     Find.set_include_path (Find.get_include_path () @ paths);
+    (* Also read FSTAR_PATH env var (colon-separated, like C_INCLUDE_PATH) *)
+    (match Util.expand_environment_variable "FSTAR_PATH" with
+     | None -> ()
+     | Some s ->
+       let env_paths = String.split [':'] s |> List.filter (fun p -> p <> "") in
+       env_paths |> List.iter (fun p -> !check_include_dir p);
+       Find.set_include_path (Find.get_include_path () @ env_paths));
     ()
   in
   parsed_args_state := Some (snapshot_all ());
@@ -2108,6 +2122,7 @@ let hint_file_for_src src_filename =
         in
         Format.fmt1 "%s.hints" file_name
 let ide                          () = get_ide                         ()
+let lsp                          () = get_lsp                         ()
 let ide_id_info_off              () = get_ide_id_info_off             ()
 let ide_file_name_st =
   let v = mk_ref (None #string) in

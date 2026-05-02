@@ -367,10 +367,49 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
 
 (* ── Main loop ────────────────────────────────────────────────── *)
 
-let handle_notification (st: server_state) (method': LSPM.lsp_method) (_params: json) : ML server_state =
+let handle_notification (st: server_state) (method': LSPM.lsp_method) (params: json) : ML server_state =
   match method' with
   | LSPM.Initialized ->
     { st with lifecycle = LSPM.StateRunning }
+
+  | LSPM.TextDocumentDidOpen ->
+    (match LSPX.get_text_document_uri params, LSPX.get_text_document_text params with
+     | Some uri, Some text ->
+       let st, repl = get_or_create_document st uri text in
+       let query = { qid = "didOpen"; qq = FullBuffer (text, Full, false) } in
+       let ide_msgs = run_ide_query repl query in
+       let issues = extract_issues_from_ide ide_msgs in
+       publish_diagnostics uri issues;
+       st
+     | _ -> st)
+
+  | LSPM.TextDocumentDidChange ->
+    (match LSPX.get_text_document_uri params with
+     | Some uri ->
+       let text_opt =
+         match LSPX.try_field "contentChanges" params with
+         | Some (JsonList (change :: _)) -> LSPX.field_str "text" change
+         | _ -> LSPX.get_text_document_text params
+       in
+       (match text_opt with
+        | Some text ->
+          let st, repl = get_or_create_document st uri text in
+          let query = { qid = "didChange"; qq = FullBuffer (text, Full, false) } in
+          let ide_msgs = run_ide_query repl query in
+          let issues = extract_issues_from_ide ide_msgs in
+          publish_diagnostics uri issues;
+          st
+        | None -> st)
+     | _ -> st)
+
+  | LSPM.TextDocumentDidClose ->
+    (match LSPX.get_text_document_uri params with
+     | Some uri ->
+       let docs = List.filter (fun d -> d.doc_uri <> uri) st.documents in
+       publish_diagnostics uri [];
+       { st with documents = docs }
+     | _ -> st)
+
   | LSPM.Exit -> st
   | _ -> st
 

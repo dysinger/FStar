@@ -62,10 +62,18 @@
           }/bin/emacs -q "$@"
         '';
 
-        karamel = pkgs.callPackage "${karamel-src}/.nix/karamel.nix" {
+        karamel = (pkgs.callPackage "${karamel-src}/.nix/karamel.nix" {
           fstar = fstar;
           inherit ocamlPackages version z3;
-        };
+        }).overrideAttrs (old: {
+          postPatch = (old.postPatch or "") + ''
+            # Makefile.common requires gtime on Darwin (a Homebrew convention).
+            # Nix provides GNU time as 'time' in nativeBuildInputs.
+            # Patch to use 'time' instead of 'gtime' so build works on macOS.
+            substituteInPlace Makefile.common \
+              --replace-fail 'gtime' 'time'
+          '';
+        });
       in
       {
         packages = {

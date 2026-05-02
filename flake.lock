@@ -20,11 +20,11 @@
     "karamel-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1774904518,
-        "narHash": "sha256-bwooU4bmESYnUA+O43r0yJsIHWFSz5AGEbz/7F5h/+A=",
+        "lastModified": 1777587961,
+        "narHash": "sha256-JAGE73o4pGPL/XOfNJvU1Xes+SvPEGkUH9477vXv7CI=",
         "owner": "FStarLang",
         "repo": "karamel",
-        "rev": "7bdb6cb2fd7661f4a0dade9ccae810451cb51746",
+        "rev": "79f86035c70ef275c0b81efea4df56f3919dcd56",
         "type": "github"
       },
       "original": {

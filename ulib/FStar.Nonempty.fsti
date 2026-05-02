@@ -1,5 +1,5 @@
 (*
-   Copyright 2008-2018 Microsoft Research
+   Copyright 2026 Microsoft Research
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -13,7 +13,13 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 *)
-module FStar.Mul
-//If we're not doing anything with tuples, 
-//open this module to let '*' be multiplication
-unfold let op_Star = Prims.op_Multiply
+module FStar.Nonempty
+
+val nonempty (a: Type) : prop
+
+val nonempty_intro #a (x: a) : nonempty a
+
+// The axiom of choice.
+val nonempty_elim (a: Type { nonempty a }) : GTot a
+
+let nonempty_elim' #a (h: nonempty a) : GTot a = nonempty_elim a

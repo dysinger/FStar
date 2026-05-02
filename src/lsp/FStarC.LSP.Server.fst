@@ -118,6 +118,7 @@ let get_or_create_document (st: server_state) (uri: string) (text: string) : ML 
     ({ st with documents = docs }, doc.doc_repl)
   | None ->
     let path = LSPX.uri_to_filepath uri in
+    Options.add_verify_module (FStarC.Parser.Dep.lowercase_module_name path);
     let env = init_env (empty_deps [path]) in
     let env = set_range env (initial_range path) in
     let repl = {

@@ -22,7 +22,6 @@ open FStar.Char
 open FStar.Classical
 open FStar.Constructive
 open FStar.DependentMap
-open FStar.ErasedLogic
 open FStar.Fin
 open FStar.Float
 open FStar.FunctionalExtensionality
@@ -45,8 +44,6 @@ open FStar.Map
 open FStar.MarkovsPrinciple
 open FStar.Math.Lemmas
 open FStar.Math.Lib
-open FStar.Matrix2
-open FStar.Mul
 open FStar.Option
 open FStar.Order
 open FStar.OrdMap

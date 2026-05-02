@@ -36,8 +36,6 @@ module List = FStarC.List
 logs an issue. Cannot do it here due to circular deps. *)
 let check_include_dir = mk_ref (fun (s:string) -> () <: ML unit)
 
-exception NotSettable of string
-
 module Ext = FStarC.Options.Ext
 
 let debug_embedding = mk_ref false
@@ -1380,7 +1378,7 @@ let specs_with_types warn_unsafe : ML (list (char & string & opt_type & Pprint.d
     EnumStr ["native"; "wrapped"; "boxwrap"],
     text "Control the representation of non-linear arithmetic functions in the SMT encoding:" ^^
     bulleted [
-      text "if 'boxwrap' use 'Prims.op_Multiply, Prims.op_Division, Prims.op_Modulus'";
+      text "if 'boxwrap' use 'Prims.op_Star, Prims.op_Division, Prims.op_Modulus'";
       text "if 'native' use '*, div, mod'";
       text "if 'wrapped' use '_mul, _div, _mod : Int*Int -> Int'";
     ] ^^

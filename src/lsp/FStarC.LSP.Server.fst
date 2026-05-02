@@ -129,7 +129,7 @@ let get_or_create_document (st: server_state) (uri: string) (text: string) : ML 
       repl_curmod = None;
       repl_env = env;
       repl_deps_stack = [];
-      repl_stdin = U.open_stdin ();
+      repl_stdin = U.open_null_reader ();
       repl_names = FStarC.Interactive.CompletionTable.empty;
       repl_buffered_input_queries = [];
       repl_lang = []
@@ -333,7 +333,7 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
                repl_line = 1; repl_column = 0; repl_fname = "";
                repl_curmod = None; repl_env = empty_env;
                repl_deps_stack = [];
-               repl_stdin = U.open_stdin ();
+               repl_stdin = U.open_null_reader ();
                repl_names = FStarC.Interactive.CompletionTable.empty;
                repl_buffered_input_queries = [];
                repl_lang = []

@@ -66,6 +66,11 @@
           fstar = fstar;
           inherit ocamlPackages version z3;
         }).overrideAttrs (old: {
+          # F* moved Low* modules (FStar.HyperStack.IO, etc.) to a separate
+          # repo. krmllib references these, so skip its verification.
+          # This matches F*'s own Makefile which passes LOWSTAR=false.
+          makeFlags = (old.makeFlags or [ ]) ++ [ "LOWSTAR=false" ];
+
           postPatch = (old.postPatch or "") + ''
             # Makefile.common requires gtime on Darwin (a Homebrew convention).
             # Nix provides GNU time as 'time' in nativeBuildInputs.

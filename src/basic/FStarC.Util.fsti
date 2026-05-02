@@ -62,6 +62,7 @@ val concat_dir_filename: string -> string -> string
 
 type stream_reader
 val open_stdin : unit -> ML stream_reader
+val open_null_reader : unit -> ML stream_reader
 val read_line: stream_reader -> ML (option string)
 val nread : stream_reader -> int -> ML (option string)
 val poll_stdin : float -> ML bool

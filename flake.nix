@@ -61,6 +61,11 @@
             )
           }/bin/emacs -q "$@"
         '';
+
+        karamel = pkgs.callPackage "${karamel-src}/.nix/karamel.nix" {
+          fstar = fstar;
+          inherit ocamlPackages version z3;
+        };
       in
       {
         packages = {
@@ -68,6 +73,7 @@
             z3
             fstar
             emacs
+            karamel
             ocamlPackages
             ;
           default = fstar;

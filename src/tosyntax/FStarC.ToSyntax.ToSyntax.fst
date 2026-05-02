@@ -989,24 +989,6 @@ and desugar_term_maybe_top (top_level:bool) (env:env_t) (top:term) : ML (S.term 
       let e = mk_term (Op(Ident.mk_ident ("==", r), args)) top.range top.level in
       desugar_term_aq env (mk_term(Op(Ident.mk_ident ("~",r), [e])) top.range top.level)
 
-    (* if op_Star has not been rebound, then it's reserved for tuples *)
-    | Op(op_star, [lhs;rhs]) when
-      (Ident.string_of_id op_star = "*" &&
-       op_as_term env 2 op_star |> None?) ->
-      (* See the comment in parse.mly to understand why this implicitly relies
-       * on the presence of a Paren node in the AST. *)
-      let rec flatten t : ML _ = match t.tm with
-        // * is left-associative
-        | Op(id, [t1;t2]) when
-           string_of_id id = "*" && None? (op_as_term env 2 op_star) ->
-          flatten t1 @ [ t2 ]
-        | _ -> [t]
-      in
-      let terms = flatten lhs in
-      //make the surface syntax for a non-dependent tuple
-      let t = {top with tm=Sum(List.map Inr terms, rhs)} in
-      desugar_term_maybe_top top_level env t
-
     | Uvar u ->
       raise_error top Errors.Fatal_UnexpectedUniverseVariable
           ("Unexpected universe variable " ^
@@ -1802,7 +1784,7 @@ and desugar_term_maybe_top (top_level:bool) (env:env_t) (top:term) : ML (S.term 
         mk_term (Abs (pats,
             mk_term (Ascribed (
                 mkApp rel [(xt, Nothing); (yt, Nothing)] rel.range,
-                mk_term (Name (Ident.lid_of_str "Type0")) rel.range Expr,
+                mk_term (Name C.prop_lid) rel.range Expr,
                 None, false)) rel.range Expr)) rel.range Expr
       in
       let rel = eta_and_annot rel in
@@ -1861,7 +1843,7 @@ and desugar_term_maybe_top (top_level:bool) (env:env_t) (top:term) : ML (S.term 
       let rec aux bs : ML _ =
         match bs with
         | [] ->
-          let sq_p = U.mk_squash U_unknown p in
+          let sq_p = U.mk_squash p in
           U.ascribe e (Inl sq_p, None, false)
 
         | b::bs ->
@@ -1994,7 +1976,7 @@ and desugar_term_maybe_top (top_level:bool) (env:env_t) (top:term) : ML (S.term 
       let env', bs = desugar_binders env binders in
       let p = desugar_term env' p in
       let q = desugar_term env q in
-      let sq_q = U.mk_squash U_unknown q in
+      let sq_q = U.mk_squash q in
       let env'', [b_pf_p] = desugar_binders env' [binder] in
       let e = desugar_term env'' e in
       let rec mk_exists bs p : ML _ =
@@ -2014,6 +1996,7 @@ and desugar_term_maybe_top (top_level:bool) (env:env_t) (top:term) : ML (S.term 
         let head = S.fv_to_tm (S.lid_and_dd_as_fv C.exists_elim_lid None) in
         let args = [(t, S.as_aqual_implicit true);
                     (x_p, S.as_aqual_implicit true);
+                    (q, S.as_aqual_implicit true);
                     (s_ex_p, None);
                     (f, None)] in
         mk_Tm_app head args r

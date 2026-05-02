@@ -23,7 +23,7 @@
         pkgs = import nixpkgs {
           inherit system;
         };
-        ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_3;
+        ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_4;
 
         z3 = pkgs.callPackage (import ./.nix/z3.nix) { };
         version = self.rev or "dirty";
@@ -49,6 +49,7 @@
         fstar = ocamlPackages.callPackage ./.nix/fstar.nix {
           inherit version z3 ocamlLibraryPath karamel-src;
           karamelOcamlDeps = karamelDrv.propagatedBuildInputs;
+          lspEnabled = true;  # force derivation rebuild for LSP
         };
 
         emacs = pkgs.writeScriptBin "emacs-fstar" ''
@@ -61,6 +62,24 @@
             )
           }/bin/emacs -q "$@"
         '';
+
+        karamel = (pkgs.callPackage "${karamel-src}/.nix/karamel.nix" {
+          fstar = fstar;
+          inherit ocamlPackages version z3;
+        }).overrideAttrs (old: {
+          # F* moved Low* modules (FStar.HyperStack.IO, etc.) to a separate
+          # repo. krmllib references these, so skip its verification.
+          # This matches F*'s own Makefile which passes LOWSTAR=false.
+          makeFlags = (old.makeFlags or [ ]) ++ [ "LOWSTAR=false" ];
+
+          postPatch = (old.postPatch or "") + ''
+            # Makefile.common requires gtime on Darwin (a Homebrew convention).
+            # Nix provides GNU time as 'time' in nativeBuildInputs.
+            # Patch to use 'time' instead of 'gtime' so build works on macOS.
+            substituteInPlace Makefile.common \
+              --replace-fail 'gtime' 'time'
+          '';
+        });
       in
       {
         packages = {
@@ -68,6 +87,7 @@
             z3
             fstar
             emacs
+            karamel
             ocamlPackages
             ;
           default = fstar;

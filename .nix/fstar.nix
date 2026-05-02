@@ -23,6 +23,7 @@
   stdint,
   util-linux,
   version,
+  lspEnabled ? false,  # force derivation rebuild for LSP
   which,
   yojson,
   z3,
@@ -106,6 +107,7 @@ buildDunePackage {
 
   buildPhase = ''
     export PATH="${z3}/bin:$PATH"
+    # LSP support enabled
     make -j$(nproc)
   '';
 

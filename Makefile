@@ -12,9 +12,12 @@ FSTAR_DEFAULT_GOAL ?= build
 all: stage1 stage2 stage3 1.tests 2.tests boot-src-bare
 all-packages: package-1 package-2 package-src-1 package-src-2
 
+karamel/Makefile:
+	$(error Error: $@ not found. Run `git submodule init && git submodule update` if you haven't)
+
 # This file is touched whenever any file in karamel/ changes, to trigger a
 # rebuild only then.
-.krml.src.touch: .force
+.krml.src.touch: .force karamel/Makefile
 	[ -f $@ ] || touch $@
 	find karamel -type f -newer $@ -exec touch $@ \; -quit
 
@@ -377,19 +380,23 @@ $(FSTAR3_FULL_EXE): .pulse-plugin.src.touch
 	$(MAKE) -C stage3 fstarc-full FSTAR_DUNE_RELEASE=1
 	touch $@
 
-.pulse-lib.touch: $(FSTAR3_FULL_EXE)
+.pulse-common.touch: $(FSTAR3_FULL_EXE)
 	$(call bold_msg, "CHECK", "PULSE CORE")
 	env \
 	  FSTAR_EXE=$(abspath $(FSTAR3_FULL_EXE)) \
 	  FSTAR_LIB=$(abspath ulib) \
 	  INCLUDE_PATHS=$(abspath stage2/ulib.checked) \
 	  $(MAKE) -C pulse/ -f mk/lib-common.mk
+
+.pulse-core.touch: $(FSTAR3_FULL_EXE) .pulse-common.touch
 	$(call bold_msg, "CHECK", "PULSE CORE IMPL")
 	env \
 	  FSTAR_EXE=$(abspath $(FSTAR3_FULL_EXE)) \
 	  FSTAR_LIB=$(abspath ulib) \
 	  INCLUDE_PATHS=$(abspath stage2/ulib.checked) \
 	  $(MAKE) -C pulse/ -f mk/lib-core.mk
+
+.pulse-lib.touch: $(FSTAR3_FULL_EXE) .pulse-common.touch
 	$(call bold_msg, "CHECK", "PULSE LIB")
 	env \
 	  FSTAR_EXE=$(abspath $(FSTAR3_FULL_EXE)) \
@@ -398,7 +405,7 @@ $(FSTAR3_FULL_EXE): .pulse-plugin.src.touch
 	  STAGE3=1 \
 	  $(MAKE) -C pulse/ -f mk/lib-pulse.mk
 
-.stage3.src.touch: .stage2.src.touch .pulse-plugin.src.touch .pulse-lib.touch
+.stage3.src.touch: .stage2.src.touch .pulse-plugin.src.touch .pulse-core.touch .pulse-lib.touch
 	touch $@
 
 define install-stage
@@ -449,6 +456,7 @@ install: export FSTAR_LINK_LIBDIRS=0 # default is false, but set anyway
 install:
 	$(call bold_msg, "INSTALL", "STAGE 3")
 	$(MAKE) -C stage3 install FSTAR_DUNE_RELEASE=1
+	$(MAKE) -C karamel install LOWSTAR=false
 
 __do-install-stage1:
 	$(call bold_msg, "INSTALL", "STAGE 1")

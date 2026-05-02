@@ -1064,6 +1064,7 @@ let rec non_informative env t : ML _ =
     | Tm_type _ -> true
     | Tm_fvar fv ->
       fv_eq_lid fv Const.unit_lid
+      || fv_eq_lid fv Const.prop_lid
       || fv_eq_lid fv Const.squash_lid
       || fv_eq_lid fv Const.erased_lid
       || fv_has_erasable_attr env fv
@@ -1075,13 +1076,6 @@ let rec non_informative env t : ML _ =
       || is_erasable_effect env (comp_effect_name c)
     | Tm_meta {tm} -> non_informative env tm
     | _ -> false
-
-let rec non_informative_sort t =
-  match (U.unrefine t).n with
-  | Tm_fvar fv when fv_eq_lid fv Const.prop_lid -> true
-  | Tm_arrow {comp=c} -> non_informative_sort (comp_result c)
-  | Tm_meta {tm} -> non_informative_sort tm
-  | _ -> false
 
 let num_effect_indices env name r =
   let sig_t = name |> lookup_effect_lid env |> SS.compress in
@@ -1147,7 +1141,7 @@ let is_interpreted (env:env) head : ML bool =
         Const.op_Subtraction;
         Const.op_Minus;
         Const.op_Addition;
-        Const.op_Multiply;
+        Const.op_Star;
         Const.op_Division;
         Const.op_Modulus;
         Const.op_And;

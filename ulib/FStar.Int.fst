@@ -18,7 +18,6 @@ module FStar.Int
 (* NOTE: anything that you fix/update here should be reflected in [FStar.UInt.fst], which is mostly
  * a copy-paste of this module. *)
 
-open FStar.Mul
 open FStar.BitVector
 open FStar.Math.Lemmas
 
@@ -179,7 +178,7 @@ let rotate_left_full_identity #n a = nth_lemma (rotate_left #n a n) a
 
 let rotate_right_full_identity #n a = nth_lemma (rotate_right #n a n) a
 
-#push-options "--split_queries always"
+#push-options "--split_queries always --z3rlimit 10"
 let rotate_left_right_inverse #n a s = nth_lemma (rotate_right #n (rotate_left #n a s) s) a
 
 private let rec rotate_mod_lemma (i:nat) (s:nat) (n:pos)

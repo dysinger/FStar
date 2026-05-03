@@ -18,6 +18,10 @@
 (* Category (a): admit_smt_queries for substring bounds — F* can't statically
    verify bounds for Util.substring calls in decode_message. The code is correct
    and extracts everywhere. *)
+(* Proof boundary: FStarC.Util.substring_from and substring are annotated ML
+   (not Tot) because F* can't verify substring bounds statically. This means
+   decode_message cannot be Tot, and lemma_framing_roundtrip must be admitted.
+   The roundtrip property holds in OCaml extraction. Deferred to v0.2.0. *)
 
 module FStarC.LSP.Transport
 open FStarC.Effect
@@ -25,8 +29,6 @@ open FStarC
 open FStarC.Format
 
 module U = FStarC.Util
-
-#push-options "--admit_smt_queries true"
 
 let crlf = "\r\n"
 let header_prefix = "Content-Length: "
@@ -53,6 +55,12 @@ let decode_message (input: string) : ML (option string) =
          | _ -> None)
     | _ -> None
 
+// Proof boundary: I/O — lemma_framing_roundtrip deferred to v0.2.0.
+// FStarC.Util.substring_from and substring are annotated ML, which
+// prevents writing a Lemma over decode_message. The roundtrip property
+// holds in OCaml extraction.
+
+// Proof boundary: I/O
 let read_message () : ML (option string) =
   let stdin = U.open_stdin () in
   match U.read_line stdin with
@@ -70,8 +78,7 @@ let read_message () : ML (option string) =
           | Some _ ->
             U.nread stdin len))
 
+// Proof boundary: I/O
 let write_message (msg: string) : ML unit =
   let framed = encode_message msg in
   Format.print_raw framed
-
-#pop-options

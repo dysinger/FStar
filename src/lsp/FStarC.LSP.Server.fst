@@ -41,6 +41,22 @@ module LSPX = FStarC.LSP.Translator
 
 #push-options "--admit_smt_queries true"
 
+let lsp_debug () : ML bool =
+  match U.expand_environment_variable "FSTAR_LSP_DEBUG" with
+  | Some "1" -> true
+  | _ -> false
+
+let lsp_trace () : ML bool =
+  match U.expand_environment_variable "FSTAR_LSP_TRACE" with
+  | Some "1" -> true
+  | _ -> false
+
+let debug_log (msg: string) : ML unit =
+  if lsp_debug () then U.fprint U.stderr "[LSP] %s\n" [msg]
+
+let trace_log (msg: string) : ML unit =
+  if lsp_trace () then U.fprint U.stderr "[LSP-TRACE] %s\n" [msg]
+
 type document_entry = {
   doc_uri: string;
   doc_text: string;
@@ -157,6 +173,30 @@ let publish_diagnostics (uri: string) (issues: list json) : ML unit =
   ] in
   LSPT.write_message (string_of_json msg)
 
+(* ── Progress reporting ── *)
+
+let progress_token_counter : ref int = mk_ref 0
+
+let next_progress_token () : ML string =
+  let n = !progress_token_counter in
+  progress_token_counter := n + 1;
+  "fstar-check-" ^ show n
+
+let send_progress (token: string) (kind: string) (title: string) : ML unit =
+  let params = JsonAssoc [
+    ("token", JsonStr token);
+    ("value", JsonAssoc [
+      ("kind", JsonStr kind);
+      ("title", JsonStr title)
+    ])
+  ] in
+  let notification = JsonAssoc [
+    ("jsonrpc", JsonStr "2.0");
+    ("method", JsonStr "$/progress");
+    ("params", params)
+  ] in
+  LSPT.write_message (string_of_json notification)
+
 (* ── Request handlers ─────────────────────────────────────────── *)
 
 let handle_initialize (st: server_state) (id: int) : ML (server_state & string) =
@@ -166,6 +206,7 @@ let handle_initialize (st: server_state) (id: int) : ML (server_state & string) 
   ({ st with lifecycle = LSPM.StateInitialized }, resp_str)
 
 let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (params: json) : ML (server_state & string) =
+  let _ = debug_log ("handle_request: " ^ LSPM.method_name method') in
   if LSPX.method_needs_initialization method' && st.lifecycle = LSPM.StateUninitialized then
     let err = LSPM.build_error id (-32002) "Server not initialized" in
     (st, string_of_json err)
@@ -230,6 +271,25 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
          publish_diagnostics uri [];
          let resp = LSPM.Response id JsonNull in
          (st, LSPM.serialize_jsonrpc resp)
+       | _ ->
+         let err = LSPM.build_error id (-32602) "Missing textDocument.uri" in
+         (st, string_of_json err))
+
+    | LSPM.TextDocumentDidSave ->
+      (match LSPX.get_text_document_uri params with
+       | Some uri ->
+         (match U.try_find (fun d -> d.doc_uri = uri) st.documents with
+          | Some doc ->
+            let qid = show id in
+            let query = { qid = qid; qq = FullBuffer (doc.doc_text, Full, false) } in
+            let ide_msgs = run_ide_query doc.doc_repl query in
+            let issues = extract_issues_from_ide ide_msgs in
+            publish_diagnostics uri issues;
+            let resp = LSPM.Response id JsonNull in
+            (st, LSPM.serialize_jsonrpc resp)
+          | None ->
+            let err = LSPM.build_error id (-32602) "Document not open" in
+            (st, string_of_json err))
        | _ ->
          let err = LSPM.build_error id (-32602) "Missing textDocument.uri" in
          (st, string_of_json err))
@@ -363,6 +423,18 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
          let err = LSPM.build_error id (-32601) "Unknown command" in
          (st, string_of_json err))
 
+    | LSPM.CancelRequest ->
+      (match st.documents with
+       | doc :: _ ->
+         let qid = show id in
+         let query = { qid = qid; qq = Cancel None } in
+         let _ = run_ide_query doc.doc_repl query in
+         let resp = LSPM.Response id JsonNull in
+         (st, LSPM.serialize_jsonrpc resp)
+       | _ ->
+         let resp = LSPM.Response id JsonNull in
+         (st, LSPM.serialize_jsonrpc resp))
+
     | _ ->
       let err = LSPM.build_error id (-32601) ("Method not implemented: " ^ LSPM.method_name method') in
       (st, string_of_json err)
@@ -370,6 +442,7 @@ let handle_request (st: server_state) (id: int) (method': LSPM.lsp_method) (para
 (* ── Main loop ────────────────────────────────────────────────── *)
 
 let handle_notification (st: server_state) (method': LSPM.lsp_method) (params: json) : ML server_state =
+  let _ = debug_log ("handle_notification: " ^ LSPM.method_name method') in
   match method' with
   | LSPM.Initialized ->
     { st with lifecycle = LSPM.StateRunning }
@@ -378,10 +451,16 @@ let handle_notification (st: server_state) (method': LSPM.lsp_method) (params: j
     (match LSPX.get_text_document_uri params, LSPX.get_text_document_text params with
      | Some uri, Some text ->
        let st, repl = get_or_create_document st uri text in
-       let query = { qid = "didOpen"; qq = FullBuffer (text, Full, false) } in
-       let ide_msgs = run_ide_query repl query in
-       let issues = extract_issues_from_ide ide_msgs in
-       publish_diagnostics uri issues;
+       let token = next_progress_token () in
+       let filename = LSPX.uri_to_filepath uri in
+       send_progress token "begin" ("Typechecking " ^ filename);
+       (try
+         let query = { qid = "didOpen"; qq = FullBuffer (text, Full, false) } in
+         let ide_msgs = run_ide_query repl query in
+         let issues = extract_issues_from_ide ide_msgs in
+         publish_diagnostics uri issues
+       with | _ -> ());
+       send_progress token "end" ("Typechecking " ^ filename);
        st
      | _ -> st)
 
@@ -396,10 +475,16 @@ let handle_notification (st: server_state) (method': LSPM.lsp_method) (params: j
        (match text_opt with
         | Some text ->
           let st, repl = get_or_create_document st uri text in
-          let query = { qid = "didChange"; qq = FullBuffer (text, Full, false) } in
-          let ide_msgs = run_ide_query repl query in
-          let issues = extract_issues_from_ide ide_msgs in
-          publish_diagnostics uri issues;
+          let token = next_progress_token () in
+          let filename = LSPX.uri_to_filepath uri in
+          send_progress token "begin" ("Typechecking " ^ filename);
+          (try
+            let query = { qid = "didChange"; qq = FullBuffer (text, Full, false) } in
+            let ide_msgs = run_ide_query repl query in
+            let issues = extract_issues_from_ide ide_msgs in
+            publish_diagnostics uri issues
+          with | _ -> ());
+          send_progress token "end" ("Typechecking " ^ filename);
           st
         | None -> st)
      | _ -> st)
@@ -412,6 +497,27 @@ let handle_notification (st: server_state) (method': LSPM.lsp_method) (params: j
        { st with documents = docs }
      | _ -> st)
 
+  | LSPM.TextDocumentDidSave ->
+    (match LSPX.get_text_document_uri params with
+     | Some uri ->
+       (match U.try_find (fun d -> d.doc_uri = uri) st.documents with
+        | Some doc ->
+          let query = { qid = "didSave"; qq = FullBuffer (doc.doc_text, Full, false) } in
+          let ide_msgs = run_ide_query doc.doc_repl query in
+          let issues = extract_issues_from_ide ide_msgs in
+          publish_diagnostics uri issues;
+          st
+        | None -> st)
+     | _ -> st)
+
+  | LSPM.CancelRequest ->
+    let _ = List.iter (fun doc ->
+      let query = { qid = "cancel"; qq = Cancel None } in
+      let _ = run_ide_query doc.doc_repl query in
+      ()
+    ) st.documents in
+    st
+
   | LSPM.Exit -> st
   | _ -> st
 
@@ -419,8 +525,10 @@ let rec server_loop (st: server_state) : ML unit =
   match LSPT.read_message () with
   | None -> ()
   | Some raw ->
+    let _ = trace_log ("raw: " ^ raw) in
     match json_of_string raw with
     | None ->
+      let _ = debug_log "Parse error: invalid JSON" in
       (try
         let err = LSPM.build_error 0 (-32700) "Parse error" in
         LSPT.write_message (string_of_json err)
@@ -429,20 +537,24 @@ let rec server_loop (st: server_state) : ML unit =
     | Some json_msg ->
       (match LSPM.parse_jsonrpc json_msg with
        | None ->
+         let _ = debug_log "parse_jsonrpc: invalid JSON-RPC message" in
          let err = LSPM.build_error 0 (-32700) "Invalid JSON-RPC message" in
          LSPT.write_message (string_of_json err);
          server_loop st
        | Some (LSPM.Request id method' params) ->
+         let _ = debug_log ("request: " ^ LSPM.method_name method') in
          (try
            let st, response_str = handle_request st id method' params in
            LSPT.write_message response_str;
            server_loop st
          with
          | _ ->
+           let _ = debug_log ("Internal error handling request") in
            let err = LSPM.build_error id (-32603) "Internal error" in
            LSPT.write_message (string_of_json err);
            server_loop st)
        | Some (LSPM.Notification method' params) ->
+         let _ = debug_log ("notification: " ^ LSPM.method_name method') in
          if method' = LSPM.Exit then (
            if st.lifecycle = LSPM.StateShutdown then exit 0
            else exit 1

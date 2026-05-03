@@ -152,7 +152,7 @@ let build_initialize_result () : ML json =
   let server_info =
     JsonAssoc [
       ("name", JsonStr "fstar");
-      ("version", JsonStr "2025")
+      ("version", JsonStr (try U.trim_string (U.file_get_contents "version.txt") with _ -> "unknown"))
     ]
   in
   let capabilities =
@@ -169,23 +169,8 @@ let build_initialize_result () : ML json =
       ("definitionProvider", JsonBool true);
       ("referencesProvider", JsonBool true);
       ("documentFormattingProvider", JsonBool true);
-      ("semanticTokensProvider", JsonAssoc [
-        ("legend", JsonAssoc [
-          ("tokenTypes", JsonList [
-            JsonStr "namespace"; JsonStr "type"; JsonStr "class";
-            JsonStr "function"; JsonStr "variable"; JsonStr "keyword";
-            JsonStr "comment"; JsonStr "string"; JsonStr "number";
-            JsonStr "operator"; JsonStr "typeParameter"
-          ]);
-          ("tokenModifiers", JsonList [
-            JsonStr "declaration"; JsonStr "definition"
-          ])
-        ]);
-        ("full", JsonBool true)
-      ]);
       ("documentSymbolProvider", JsonBool true);
       ("workspaceSymbolProvider", JsonBool true);
-      ("foldingRangeProvider", JsonBool true);
       ("executeCommandProvider", JsonAssoc [
         ("commands", JsonList [JsonStr "fstar.restartSolver"])
       ])

@@ -155,7 +155,9 @@ let parse_frag frag lang_decls =
 //This is the main driver of the typechecker, checking one declaration at a time    
 let tc_one_fragment is_interface curmod (env:TcEnv.env_t) frag =
   let open FStarC.Parser.AST in
-  let fname env = List.hd (Options.file_list ()) in
+  let fname env = match Options.ide_filename () with
+    | Some f -> f
+    | None -> List.hd (Options.file_list ()) in
   let acceptable_mod_name ast_modul =
     (* Interface is sent as the first chunk, so we must allow repeating the same module. *)
     Parser.Dep.lowercase_module_name (fname env) =

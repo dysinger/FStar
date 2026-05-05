@@ -7,7 +7,6 @@ open Pprintast
 open Ast_helper
 open Ast
 open Ppxlib.Ast_builder.Default
-open Longident
 
 open FStarC_Extraction_ML_Syntax
 
@@ -33,7 +32,7 @@ let no_attrs: attributes = []
 (* functions for generating names and paths *)
 let mk_sym s: string Location.loc = {txt=s; loc=no_location}
 
-let mk_sym_lident s: Longident.t Location.loc = {txt=s; loc=no_location}
+let mk_sym_lident s: longident Location.loc = {txt=s; loc=no_location}
 
 let mk_lident name = Lident name |> mk_sym_lident
 
@@ -61,7 +60,7 @@ let split_path (l1: string list) (l2: string list): (string list * string list) 
     | Some l1' -> Some (l1', l2)
   else None
 
-let path_to_ident ((l, sym): mlpath): Longident.t Asttypes.loc =
+let path_to_ident ((l, sym): mlpath): longident Asttypes.loc =
   let codegen_libs = FStarC_Options.codegen_libs() in
   match l with
   | [] -> mk_lident sym

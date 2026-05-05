@@ -31,13 +31,26 @@ module U = FStarC.Util
 let try_assoc (key: string) (d: assoct) =
   Option.map snd (U.try_find (fun (k, _) -> k = key) d)
 
+(* Capture printer: when set, write_json routes output to this callback
+   instead of Format.print_raw. Used by LSP server to intercept IDE output. *)
+let capture_printer : ref (option (json -> unit)) = mk_ref None
+
+let set_capture_printer (printer : json -> unit) : unit =
+  capture_printer := Some printer
+
+let clear_capture_printer () : unit =
+  capture_printer := None
+
 // All exceptions are guaranteed to be caught in the LSP server implementation
 exception InvalidQuery of string // Only in IDE
 exception UnexpectedJsonType of string & json
 
 let write_json (js: json) =
-  Format.print_raw (string_of_json js);
-  Format.print_raw "\n"
+  match !capture_printer with
+  | Some printer -> printer js
+  | None ->
+    Format.print_raw (string_of_json js);
+    Format.print_raw "\n"
 
 // Only used in IDE
 let js_fail expected got =

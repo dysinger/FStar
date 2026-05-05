@@ -323,6 +323,7 @@ let ask_process
 
 type stream_reader = BatIO.input
 let open_stdin () = BatIO.stdin
+let open_null_reader () = BatIO.input_string ""
 let read_line s =
   try
     Some (BatIO.read_line s)

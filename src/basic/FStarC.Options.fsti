@@ -153,6 +153,7 @@ val hide_uvar_nums              : unit    -> bool
 val hint_info                   : unit    -> bool
 val hint_file_for_src           : string  -> string
 val ide                         : unit    -> bool
+val lsp                         : unit    -> bool
 val ide_id_info_off             : unit    -> bool
 val set_ide_filename            : string -> unit
 val ide_filename                : unit -> option string

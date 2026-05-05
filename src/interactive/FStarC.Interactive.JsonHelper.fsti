@@ -27,6 +27,11 @@ type assoct = list (string & json)
 
 val try_assoc : string -> assoct -> option json // nothrow
 
+(* Capture printer: when set, write_json routes output to this callback.
+   Used by LSP server to intercept IDE output. *)
+val set_capture_printer : (json -> unit) -> unit
+val clear_capture_printer : unit -> unit
+
 exception InvalidQuery of string
 exception UnexpectedJsonType of string & json
 

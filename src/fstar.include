@@ -4,6 +4,7 @@ data
 extraction
 fstar
 interactive
+lsp
 parser
 prettyprint
 reflection

@@ -1,3 +1,4 @@
 t/v2025.12.15-fstar-path-env-var
 t/v2025.12.15-lsp
 t/v2025.12.15-ocaml-5.4
+t/lemma-int-vs-nat

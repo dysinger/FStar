@@ -1,0 +1,15 @@
+From: pi <pi@codec>
+Subject: [PATCH] t/lemma-int-vs-nat: allow nat coercion in guarded branches
+
+When checking `n-1 : nat` where the branch context proves `n > 0`,
+F* should query SMT to verify `n-1 >= 0` and allow the subtype check.
+
+Location: src/typechecker/FStarC.TypeChecker.Rel.fst ~ line 4078
+The refinement subtyping case `n:nat{phi n} =?= i:int{psi i}` already
+handles base type matching via head_matches_delta. The fix is to
+extend this to also handle arithmetic expressions in argument positions
+by querying SMT through the existing `wl.smt_ok` mechanism.
+
+Alternative location: check_application_args in
+src/typechecker/FStarC.TypeChecker.TcTerm.fst ~ line 2484
+where argument types are checked against parameter types.

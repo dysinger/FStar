@@ -1,5 +1,5 @@
 (*
-   Copyright 2008-2016  Nikhil Swamy and Microsoft Research
+   Copyright 2008-2025 Microsoft Research
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@
    limitations under the License.
 *)
 
-module FStarC.Interactive.Ide
-
+module FStarC.LSP.Transport
 open FStarC.Effect
-open FStarC.Interactive.Ide.Types
 
-val interactive_mode (filename:string): unit
-
-/// Evaluate a single IDE query against a repl_state.
-val js_repl_eval : repl_state -> query -> (list FStarC.Json.json & either repl_state int)
-
-/// Install hooks to redirect Format output and error handling.
-val install_ide_mode_hooks : (FStarC.Json.json -> unit) -> unit
+val encode_message : string -> Tot string
+val decode_message : string -> ML (option string)
+val read_message : unit -> ML (option string)
+val write_message : string -> ML unit

@@ -163,3 +163,6 @@ val js_diag : string -> string -> option Range.t -> assoct
 // Build an empty JSON diagnostic; used for clearing diagnostic
 val js_diag_clear : string -> assoct
 
+
+val set_capture_printer : (json -> unit) -> unit
+val clear_capture_printer : unit -> unit

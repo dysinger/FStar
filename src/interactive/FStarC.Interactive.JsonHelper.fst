@@ -258,3 +258,7 @@ let js_diag_clear (fname: string) : assoct =
   [("method", JsonStr "textDocument/publishDiagnostics");
    ("params", JsonAssoc [("uri", JsonStr (path_to_uri fname)); ("diagnostics", JsonList [])])]
 
+
+let capture_printer : ref (option (json -> unit)) = mk_ref None
+let set_capture_printer (printer : json -> unit) : unit = capture_printer := Some printer
+let clear_capture_printer () : unit = capture_printer := None
